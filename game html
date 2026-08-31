@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Поймай звезду!</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: #0a0e1a;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            touch-action: none;
+        }
+
+        .game-wrapper {
+            background: #141e33;
+            padding: 18px 18px 22px;
+            border-radius: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.8), inset 0 2px 4px rgba(255,255,255,0.05);
+            border: 1px solid #3d5f7a;
+            max-width: 550px;
+            width: 100%;
+            margin: 10px;
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            width: 100%;
+            aspect-ratio: 1/1;
+            background: #0b1424;
+            border-radius: 28px;
+            box-shadow: inset 0 0 40px #03080f, 0 10px 20px rgba(0,0,0,0.7);
+            border: 2px solid #2f4d68;
+            touch-action: none;
+            cursor: pointer;
+        }
+
+        .game-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding: 0 6px;
+            gap: 10px;
+        }
+
+        .score-panel {
+            background: #0b1424;
+            padding: 6px 18px;
+            border-radius: 40px;
+            color: #f0e9d8;
+            font-weight: 700;
+            font-size: 1.4rem;
+            border-bottom: 3px solid #4a6f8a;
+            box-shadow: inset 0 3px 6px rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .score-panel span {
+            color: #ffd966;
+            min-width: 35px;
+            text-align: center;
+        }
+
+        .restart-btn {
+            background: #2a4259;
+            border: none;
+            border-bottom: 4px solid #0f1a26;
+            color: #f5efe0;
+            font-size: 1rem;
+            font-weight: 700;
+            padding: 6px 18px;
+            border-radius: 40px;
+            cursor: pointer;
+            transition: all 0.08s ease;
+            box-shadow: 0 5px 0 #0d1722, 0 6px 12px black;
+            white-space: nowrap;
+        }
+
+        .restart-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 1px 0 #0d1722;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 14px;
+            touch-action: none;
+        }
+
+        .ctrl-btn {
+            background: #1f3448;
+            border: none;
+            border-bottom: 4px solid #0d1b2a;
+            border-radius: 20px;
+            color: #dce9f5;
+            font-size: 2.2rem;
+            font-weight: 700;
+            padding: 12px 30px;
+            cursor: pointer;
+            transition: all 0.05s ease;
+            box-shadow: 0 5px 0 #0d1722, inset 0 2px 6px rgba(255,255,255,0.08);
+            touch-action: none;
+            min-width: 80px;
+            flex: 1;
+            text-shadow: 0 2px 3px rgba(0,0,0,0.5);
+        }
+
+        .ctrl-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 1px 0 #0d1722;
+            background: #2a445e;
+        }
+
+        .ctrl-btn:last-child {
+            background: #3d2a4a;
+            border-bottom-color: #1f0f26;
+        }
+
+        .ctrl-btn:last-child:active {
+            background: #523d61;
+        }
+
+        @media (max-width: 450px) {
+            .ctrl-btn {
+                font-size: 1.6rem;
+                padding: 10px 16px;
+                min-width: 60px;
+            }
+            .score-panel {
+                font-size: 1.1rem;
+                padding: 4px 12px;
+            }
+            .restart-btn {
+                font-size: 0.85rem;
+                padding: 4px 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-wrapper">
+    <div class="game-header">
+        <div class="score-panel">
+            ⭐ <span id="scoreDisplay">0</span>
+        </div>
+        <button class="restart-btn" id="restartButton">⟳ Рестарт</button>
+    </div>
+
+    <canvas id="gameCanvas" width="500" height="500"></canvas>
+
+    <div class="controls">
+        <button class="ctrl-btn" id="btnLeft">◀</button>
+        <button class="ctrl-btn" id="btnRight">▶</button>
+        <button class="ctrl-btn" id="btnRestartMobile">⟳</button>
+    </div>
+</div>
+
+<script>
+    (function() {
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreSpan = document.getElementById('scoreDisplay');
+
+        const W = 500, H = 500;
+        const BASKET_W = 70;
+        const BASKET_H = 30;
+        const STAR_SIZE = 22;
+        const METEOR_SIZE = 18;
+
+        // Игрок (корзинка)
+        let player = { x: 215, y: 450 };
+
+        // Массивы объектов
+        let stars = [];
+        let meteors = [];
+        let score = 0;
+        let gameActive = true;
+        let frameCounter = 0;
+
+        // Флаги движения
+        let moveLeft = false;
+        let moveRight = false;
+        const MOVE_SPEED = 7;
+
+        // ---------- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ----------
+        function random(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function rectCollide(r1, r2) {
+            return !(r2.x >= r1.x + r1.w ||
+                r2.x + r2.w <= r1.x ||
+                r2.y >= r1.y + r1.h ||
+                r2.y + r2.h <= r1.y);
+        }
+
+        // ---------- СОЗДАНИЕ ОБЪЕКТОВ ----------
+        function createStar() {
+            return {
+                x: random(20, W - STAR_SIZE - 20),
+                y: -STAR_SIZE,
+                size: STAR_SIZE,
+                speed: random(2, 5),
+                type: 'star'
+            };
+        }
+
+        function createMeteor() {
+            return {
+                x: random(20, W - METEOR_SIZE - 20),
+                y: -METEOR_SIZE,
+                size: METEOR_SIZE,
+                speed: random(3, 7),
+                type: 'meteor'
+            };
+        }
+
+        // ---------- ИНИЦИАЛИЗАЦИЯ ----------
+        function resetGame() {
+            player.x = 215;
+            stars = [];
+            meteors = [];
+            score = 0;
+            gameActive = true;
+            frameCounter = 0;
+            moveLeft = false;
+            moveRight = false;
+            updateScore();
+            draw();
+        }
+
+        function updateScore() {
+            scoreSpan.textContent = score;
+        }
+
+        // ---------- ОБНОВЛЕНИЕ ИГРЫ ----------
+        function update() {
+            if (!gameActive) return;
+
+            // Движение игрока
+            if (moveLeft) {
+                player.x = Math.max(0, player.x - MOVE_SPEED);
+            }
+            if (moveRight) {
+                player.x = Math.min(W - BASKET_W, player.x + MOVE_SPEED);
+            }
+
+            // Спавн объектов
+            frameCounter++;
+            if (frameCounter % 25 === 0) {
+                stars.push(createStar());
+            }
+            if (frameCounter % 45 === 0) {
+                meteors.push(createMeteor());
+            }
+            // Иногда дополнительные звёзды
+            if (frameCounter % 12 === 0 && Math.random() < 0.3) {
+                stars.push(createStar());
+            }
+
+            // Обновление звёзд
+            const newStars = [];
+            for (let star of stars) {
+                star.y += star.speed;
+                if (star.y > H + 20) continue;
+
+                // Проверка столкновения с корзинкой
+                const basketRect = {
+                    x: player.x,
+                    y: player.y,
+                    w: BASKET_W,
+                    h: BASKET_H
+                };
+                const starRect = {
+                    x: star.x,
+                    y: star.y,
+                    w: STAR_SIZE,
+                    h: STAR_SIZE
+                };
+                if (rectCollide(basketRect, starRect)) {
+                    score += 10;
+                    updateScore();
+                    continue; // не добавляем звезду обратно
+                }
+                newStars.push(star);
+            }
+            stars = newStars;
+
+            // Обновление метеоров
+            const newMeteors = [];
+            for (let meteor of meteors) {
+                meteor.y += meteor.speed;
+                if (meteor.y > H + 20) continue;
+
+                const basketRect = {
+                    x: player.x,
+                    y: player.y,
+                    w: BASKET_W,
+                    h: BASKET_H
+                };
+                const meteorRect = {
+                    x: meteor.x,
+                    y: meteor.y,
+                    w: METEOR_SIZE,
+                    h: METEOR_SIZE
+                };
+                if (rectCollide(basketRect, meteorRect)) {
+                    gameActive = false;
+                    draw();
+                    return;
+                }
+                newMeteors.push(meteor);
+            }
+            meteors = newMeteors;
+
+            // Если звёзд слишком много — ограничиваем
+            if (stars.length > 30) {
+                stars = stars.slice(-25);
+            }
+            if (meteors.length > 20) {
+                meteors = meteors.slice(-15);
+            }
+
+            draw();
+        }
+
+        // ---------- ОТРИСОВКА ----------
+        function draw() {
+            ctx.clearRect(0, 0, W, H);
+
+            // Космический фон
+            const grad = ctx.createRadialGradient(250, 200, 50, 300, 300, 400);
+            grad.addColorStop(0, '#1a2d4a');
+            grad.addColorStop(0.5, '#0f1a30');
+            grad.addColorStop(1, '#030812');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, W, H);
+
+            // Звёзды на фоне (мерцающие точки)
+            ctx.fillStyle = '#ffffff';
+            for (let i = 0; i < 60; i++) {
+                const x = (i * 37 + 13) % W;
+                const y = (i * 53 + 7) % H;
+                const brightness = 0.3 + 0.7 * (Math.sin(i * 2.3 + Date.now() / 800) * 0.5 + 0.5);
+                ctx.globalAlpha = brightness * 0.6;
+                ctx.beginPath();
+                ctx.arc(x, y, 1.5, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+
+            // ----- ЗВЁЗДЫ (падающие) -----
+            for (let star of stars) {
+                const x = star.x, y = star.y, s = star.size;
+                // Свечение
+                ctx.shadowColor = '#ffdd44';
+                ctx.shadowBlur = 30;
+
+                // Золотая звезда
+                const gradStar = ctx.createRadialGradient(x+6, y+6, 3, x+11, y+11, 16);
+                gradStar.addColorStop(0, '#ffee77');
+                gradStar.addColorStop(0.6, '#ffbb33');
+                gradStar.addColorStop(1, '#cc8800');
+                ctx.fillStyle = gradStar;
+                ctx.shadowBlur = 35;
+
+                // Рисуем звезду (ромб)
+                ctx.beginPath();
+                ctx.moveTo(x + s/2, y);
+                ctx.lineTo(x + s, y + s/2);
+                ctx.lineTo(x + s/2, y + s);
+                ctx.lineTo(x, y + s/2);
+                ctx.closePath();
+                ctx.fill();
+
+                // Обводка
+                ctx.shadowBlur = 0;
+                ctx.strokeStyle = '#ffe066';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+                // Блик
+                ctx.fillStyle = 'rgba(255,255,220,0.5)';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#ffdd44';
+                ctx.beginPath();
+                ctx.arc(x+5, y+5, 4, 0, 2*Math.PI);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+
+            // ----- МЕТЕОРЫ (опасные) -----
+            for (let meteor of meteors) {
+                const x = meteor.x, y = meteor.y, s = meteor.size;
+                // Огненное свечение
+                ctx.shadowColor = '#ff3300';
+                ctx.shadowBlur = 35;
+
+                // Градиент метеора
+                const gradMeteor = ctx.createRadialGradient(x+4, y+4, 3, x+9, y+9, 14);
+                gradMeteor.addColorStop(0, '#ff6633');
+                gradMeteor.addColorStop(0.5, '#cc2200');
+                gradMeteor.addColorStop(1, '#661100');
+                ctx.fillStyle = gradMeteor;
+                ctx.shadowBlur = 40;
+
+                // Круглый метеор с неровным краем
+                ctx.beginPath();
+                ctx.arc(x + s/2, y + s/2, s/2, 0, 2 * Math.PI);
+                ctx.fill();
+
+                // Текстура (кратеры)
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = 'rgba(80,30,0,0.4)';
+                ctx.beginPath();
+                ctx.arc(x+5, y+5, 4, 0, 2*Math.PI);
+                ctx.fill();
+                ctx.fillStyle = 'rgba(40,15,0,0.3)';
+                ctx.beginPath();
+                ctx.arc(x+12, y+10, 3, 0, 2*Math.PI);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+
+            // ----- КОРЗИНКА (игрок) -----
+            const px = player.x, py = player.y;
+            ctx.shadowColor = '#44aaff';
+            ctx.shadowBlur = 25;
+
+            // Корпус корзинки
+            const gradBasket = ctx.createLinearGradient(px, py, px, py + BASKET_H);
+            gradBasket.addColorStop(0, '#66ccff');
+            gradBasket.addColorStop(0.4, '#3399ee');
+            gradBasket.addColorStop(1, '#1155aa');
+            ctx.fillStyle = gradBasket;
+            ctx.shadowBlur = 30;
+
+            // Скруглённая корзинка
+            const r = 10;
+            ctx.beginPath();
+            ctx.moveTo(px + r, py);
+            ctx.lineTo(px + BASKET_W - r, py);
+            ctx.quadraticCurveTo(px + BASKET_W, py, px + BASKET_W, py + r);
+            ctx.lineTo(px + BASKET_W, py + BASKET_H - r);
+            ctx.quadraticCurveTo(px + BASKET_W, py + BASKET_H, px + BASKET_W - r, py + BASKET_H);
+            ctx.lineTo(px + r, py + BASKET_H);
+            ctx.quadraticCurveTo(px, py + BASKET_H, px, py + BASKET_H - r);
+            ctx.lineTo(px, py + r);
+            ctx.quadraticCurveTo(px, py, px + r, py);
+            ctx.closePath();
+            ctx.fill();
+
+            // Бортик
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = '#88ddff';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+
+            // Ручка корзинки
+            ctx.beginPath();
+            ctx.strokeStyle = '#88ddff';
+            ctx.lineWidth = 3;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#44aaff';
+            ctx.moveTo(px + 15, py);
+            ctx.quadraticCurveTo(px + BASKET_W/2, py - 18, px + BASKET_W - 15, py);
+            ctx.stroke();
+
+            // Полоски на корзинке
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+            ctx.lineWidth = 1.5;
+            for (let i = 0; i < 4; i++) {
+                const xPos = px + 12 + i * 16;
+                ctx.beginPath();
+                ctx.moveTo(xPos, py + 6);
+                ctx.lineTo(xPos, py + BASKET_H - 6);
+                ctx.stroke();
+            }
+
+            // Если игра проиграна
+            if (!gameActive) {
+                ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                ctx.fillRect(0, 0, W, H);
+                ctx.font = 'bold 44px sans-serif';
+                ctx.fillStyle = '#ff6b4a';
+                ctx.shadowBlur = 40;
+                ctx.shadowColor = '#ff2200';
+                ctx.textAlign = 'center';
+                ctx.fillText('💥 GAME OVER', W/2, 230);
+                ctx.shadowBlur = 0;
+                ctx.font = '22px sans-serif';
+                ctx.fillStyle = '#ffd966';
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = '#ffbb00';
+                ctx.fillText('Нажми Рестарт', W/2, 290);
+                ctx.shadowBlur = 0;
+                ctx.textAlign = 'left';
+            }
+        }
+
+        // ---------- ЦИКЛ ИГРЫ ----------
+        let loopId = null;
+
+        function gameLoop() {
+            update();
+            loopId = requestAnimationFrame(gameLoop);
+        }
+
+        // ---------- УПРАВЛЕНИЕ КНОПКАМИ ----------
+        function setupButton(id, onStart, onEnd) {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+
+            const start = (e) => {
+                e.preventDefault();
+                onStart();
+            };
+            const end = (e) => {
+                e.preventDefault();
+                if (onEnd) onEnd();
+            };
+
+            btn.addEventListener('mousedown', start);
+            btn.addEventListener('mouseup', end);
+            btn.addEventListener('mouseleave', end);
+            btn.addEventListener('touchstart', start, { passive: false });
+            btn.addEventListener('touchend', end, { passive: false });
+            btn.addEventListener('touchcancel', end);
+        }
+
+        setupButton('btnLeft', () => { moveLeft = true; }, () => { moveLeft = false; });
+        setupButton('btnRight', () => { moveRight = true; }, () => { moveRight = false; });
+
+        // Кнопка рестарта (мобильная)
+        document.getElementById('btnRestartMobile').addEventListener('click', () => {
+            resetGame();
+        });
+
+        // Клавиатура
+        document.addEventListener('keydown', (e) => {
+            const key = e.key;
+            if (['ArrowLeft', 'ArrowRight', 'a', 'A', 'd', 'D'].includes(key)) {
+                e.preventDefault();
+            }
+            if (key === 'ArrowLeft' || key === 'a' || key === 'A') moveLeft = true;
+            if (key === 'ArrowRight' || key === 'd' || key === 'D') moveRight = true;
+        });
+
+        document.addEventListener('keyup', (e) => {
+            const key = e.key;
+            if (['ArrowLeft', 'ArrowRight', 'a', 'A', 'd', 'D'].includes(key)) {
+                e.preventDefault();
+            }
+            if (key === 'ArrowLeft' || key === 'a' || key === 'A') moveLeft = false;
+            if (key === 'ArrowRight' || key === 'd' || key === 'D') moveRight = false;
+        });
+
+        // Сброс флагов при потере фокуса
+        window.addEventListener('blur', () => {
+            moveLeft = false;
+            moveRight = false;
+        });
+
+        // ---------- РЕСТАРТ (основной) ----------
+        document.getElementById('restartButton').addEventListener('click', resetGame);
+
+        // ---------- ЗАПУСК ----------
+        resetGame();
+        if (loopId) cancelAnimationFrame(loopId);
+        gameLoop();
+
+        // Защита от скролла
+        document.addEventListener('touchmove', (e) => {
+            if (e.target.closest('.game-wrapper')) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+    })();
+</script>
+</body>
+</html>
